@@ -12,10 +12,31 @@ import { Session } from "./types";
 //   UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN.
 // ---------------------------------------------------------------------------
 
+// Find the Upstash/KV REST credentials regardless of the prefix Vercel/Upstash
+// chose when the database was connected. We first try the well-known names,
+// then fall back to scanning env vars by suffix so any custom prefix works
+// (e.g. STORAGE_KV_REST_API_URL, MYDB_REDIS_REST_URL, etc.).
+function findEnv(suffixes: string[], avoid: string[] = []): string {
+  for (const s of suffixes) {
+    for (const [k, v] of Object.entries(process.env)) {
+      if (!v) continue;
+      if (avoid.some((a) => k.includes(a))) continue;
+      if (k === s || k.endsWith("_" + s)) return v;
+    }
+  }
+  return "";
+}
+
 const REST_URL =
-  process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || "";
+  process.env.KV_REST_API_URL ||
+  process.env.UPSTASH_REDIS_REST_URL ||
+  findEnv(["REST_API_URL", "REDIS_REST_URL"]);
+
 const REST_TOKEN =
-  process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || "";
+  process.env.KV_REST_API_TOKEN ||
+  process.env.UPSTASH_REDIS_REST_TOKEN ||
+  // Prefer a read/write token; never pick a read-only one.
+  findEnv(["REST_API_TOKEN", "REDIS_REST_TOKEN"], ["READ_ONLY", "READONLY"]);
 
 const useRedis = Boolean(REST_URL && REST_TOKEN);
 
